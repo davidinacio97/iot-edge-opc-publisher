@@ -1269,7 +1269,7 @@ namespace OpcPublisher
                             {
                                 Logger.Warning($"Hit configured missed keep alive threshold of {OpcKeepAliveDisconnectThreshold}. Disconnecting the session to endpoint {session.ConfiguredEndpoint.EndpointUrl}.");
                                 session.KeepAlive -= StandardClient_KeepAlive;
-                                Task t = Task.Run(async () => await DisconnectAsync().ConfigureAwait(false));
+                                Task t = Task.Run(() => DisconnectAsync().ConfigureAwait(false));
                             }
                         }
                     }

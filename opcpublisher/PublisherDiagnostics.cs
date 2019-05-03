@@ -54,7 +54,7 @@ namespace OpcPublisher
             // kick off the task to show diagnostic info
             if (DiagnosticsInterval > 0)
             {
-                _showDiagnosticsInfoTask = Task.Run(async () => await ShowDiagnosticsInfoAsync(_shutdownTokenSource.Token).ConfigureAwait(false));
+                _showDiagnosticsInfoTask = Task.Run(() => ShowDiagnosticsInfoAsync(_shutdownTokenSource.Token).ConfigureAwait(false));
             }
         }
 

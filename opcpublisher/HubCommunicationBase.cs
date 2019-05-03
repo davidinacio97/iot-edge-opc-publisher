@@ -201,7 +201,7 @@ namespace OpcPublisher
                 await _hubClient.OpenAsync().ConfigureAwait(false);
 
                 // init twin properties and method callbacks (not supported for HTTP)
-                // todo check if this is 
+                // todo check if this is
                 if (!IsHttp1Transport())
                 {
                     // init twin properties and method callbacks
@@ -1240,7 +1240,7 @@ namespace OpcPublisher
                     int secondsTillExit = exitApplicationMethodRequest != null ? exitApplicationMethodRequest.SecondsTillExit : 5;
                     secondsTillExit = secondsTillExit < 5 ? 5 : secondsTillExit;
 #pragma warning disable CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
-                    Task.Run(async () => await ExitApplicationAsync(secondsTillExit).ConfigureAwait(false));
+                    Task.Run(() => ExitApplicationAsync(secondsTillExit).ConfigureAwait(false));
 #pragma warning restore CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
                     statusMessage = $"Module will exit now...";
                     Logger.Information($"{logPrefix} {statusMessage}");
@@ -1355,7 +1355,7 @@ namespace OpcPublisher
                 _monitoredItemsProcessorTask = null;
 
                 Logger.Information("Creating task process and batch monitored item data updates...");
-                _monitoredItemsProcessorTask = Task.Run(async () => await MonitoredItemsProcessorAsync(_shutdownToken).ConfigureAwait(false), _shutdownToken);
+                _monitoredItemsProcessorTask = Task.Run(() => MonitoredItemsProcessorAsync(_shutdownToken).ConfigureAwait(false), _shutdownToken);
                 return Task.FromResult(true);
             }
             catch (Exception e)
