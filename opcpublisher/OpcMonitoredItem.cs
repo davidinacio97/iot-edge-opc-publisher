@@ -72,10 +72,6 @@ namespace OpcPublisher
         /// </summary>
         public string NodeDisplayName { get; set; }
 
-        /// <summary>
-        /// Message Type of this message.
-        /// </summary>
-        public string MessageType { get; set; }
 
         /// <summary>
         /// Ctor of the object.
@@ -140,11 +136,6 @@ namespace OpcPublisher
             {
                 Status = telemetryConfiguration.Value.Status.PatternMatch(Status);
             }
-        }
-
-        public override string ToString()
-        {
-            return $"{nameof(EndpointUrl)}: {EndpointUrl}, {nameof(NodeId)}: {NodeId}, {nameof(ApplicationUri)}: {ApplicationUri}, {nameof(DisplayName)}: {DisplayName}, {nameof(Value)}: {Value}, {nameof(SourceTimestamp)}: {SourceTimestamp}, {nameof(StatusCode)}: {StatusCode}, {nameof(Status)}: {Status}, {nameof(PreserveValueQuotes)}: {PreserveValueQuotes}, {nameof(Description)}: {Description}, {nameof(NodeDisplayName)}: {NodeDisplayName}, {nameof(MessageType)}: {MessageType}";
         }
     }
 
@@ -403,13 +394,12 @@ namespace OpcPublisher
                 HeartbeatSendTimer?.Change(Timeout.Infinite, Timeout.Infinite);
 
                 MessageData messageData = new MessageData();
-                // Provide custom information TODO
+                // Provide custom information
                 var node = monitoredItem.Subscription.Session.NodeCache.Find(monitoredItem.ResolvedNodeId);
                 if (node is ILocalNode localNode)
                 {
                     messageData.NodeDisplayName = localNode.DisplayName.Text;
                     messageData.Description = localNode.Description.Text;
-                    messageData.MessageType = null;
                 }
 
                 if (IotCentralMode)
@@ -593,7 +583,6 @@ namespace OpcPublisher
                 else
                 {
                     // enqueue the telemetry event
-                    Logger.Information($"Enqueue {messageData}");
                     Hub.Enqueue(messageData);
                 }
             }
