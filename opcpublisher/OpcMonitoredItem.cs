@@ -63,6 +63,21 @@ namespace OpcPublisher
         public bool PreserveValueQuotes { get; set; }
 
         /// <summary>
+        /// Description of the OPC UA Item.
+        /// </summary>
+        public string Description { get; set; }
+
+        /// <summary>
+        /// Display name of the OPC UA Item.
+        /// </summary>
+        public string NodeDisplayName { get; set; }
+
+        /// <summary>
+        /// Message Type of this message.
+        /// </summary>
+        public string MessageType { get; set; }
+
+        /// <summary>
         /// Ctor of the object.
         /// </summary>
         public MessageData()
@@ -87,26 +102,32 @@ namespace OpcPublisher
             {
                 EndpointUrl = telemetryConfiguration.EndpointUrl.PatternMatch(EndpointUrl);
             }
+
             if (telemetryConfiguration.NodeId.Publish == true)
             {
                 NodeId = telemetryConfiguration.NodeId.PatternMatch(NodeId);
             }
+
             if (telemetryConfiguration.MonitoredItem.ApplicationUri.Publish == true)
             {
                 ApplicationUri = telemetryConfiguration.MonitoredItem.ApplicationUri.PatternMatch(ApplicationUri);
             }
+
             if (telemetryConfiguration.MonitoredItem.DisplayName.Publish == true)
             {
                 DisplayName = telemetryConfiguration.MonitoredItem.DisplayName.PatternMatch(DisplayName);
             }
+
             if (telemetryConfiguration.Value.Value.Publish == true)
             {
                 Value = telemetryConfiguration.Value.Value.PatternMatch(Value);
             }
+
             if (telemetryConfiguration.Value.SourceTimestamp.Publish == true)
             {
                 SourceTimestamp = telemetryConfiguration.Value.SourceTimestamp.PatternMatch(SourceTimestamp);
             }
+
             if (telemetryConfiguration.Value.StatusCode.Publish == true && StatusCode != null)
             {
                 if (!string.IsNullOrEmpty(telemetryConfiguration.Value.StatusCode.Pattern))
@@ -114,10 +135,16 @@ namespace OpcPublisher
                     Logger.Information($"'Pattern' settngs for StatusCode are ignored.");
                 }
             }
+
             if (telemetryConfiguration.Value.Status.Publish == true)
             {
                 Status = telemetryConfiguration.Value.Status.PatternMatch(Status);
             }
+        }
+
+        public override string ToString()
+        {
+            return $"{nameof(EndpointUrl)}: {EndpointUrl}, {nameof(NodeId)}: {NodeId}, {nameof(ApplicationUri)}: {ApplicationUri}, {nameof(DisplayName)}: {DisplayName}, {nameof(Value)}: {Value}, {nameof(SourceTimestamp)}: {SourceTimestamp}, {nameof(StatusCode)}: {StatusCode}, {nameof(Status)}: {Status}, {nameof(PreserveValueQuotes)}: {PreserveValueQuotes}, {nameof(Description)}: {Description}, {nameof(NodeDisplayName)}: {NodeDisplayName}, {nameof(MessageType)}: {MessageType}";
         }
     }
 
@@ -376,6 +403,15 @@ namespace OpcPublisher
                 HeartbeatSendTimer?.Change(Timeout.Infinite, Timeout.Infinite);
 
                 MessageData messageData = new MessageData();
+                // Provide custom information TODO
+                var node = monitoredItem.Subscription.Session.NodeCache.Find(monitoredItem.ResolvedNodeId);
+                if (node is ILocalNode localNode)
+                {
+                    messageData.NodeDisplayName = localNode.DisplayName.Text;
+                    messageData.Description = localNode.Description.Text;
+                    messageData.MessageType = null;
+                }
+
                 if (IotCentralMode)
                 {
                     // for IoTCentral we use the DisplayName as the key in the telemetry and the Value as the value.
@@ -557,6 +593,7 @@ namespace OpcPublisher
                 else
                 {
                     // enqueue the telemetry event
+                    Logger.Information($"Enqueue {messageData}");
                     Hub.Enqueue(messageData);
                 }
             }

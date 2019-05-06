@@ -113,6 +113,7 @@ namespace OpcPublisher
             ApplicationConfiguration.ApplicationUri = ApplicationUri;
             ApplicationConfiguration.ProductUri = ProductUri;
             ApplicationConfiguration.ApplicationType = ApplicationType.ClientAndServer;
+            
 
             // configure OPC stack tracing
             ApplicationConfiguration.TraceConfiguration = new TraceConfiguration();
@@ -150,7 +151,15 @@ namespace OpcPublisher
                 SecurityMode = MessageSecurityMode.SignAndEncrypt,
                 SecurityPolicyUri = SecurityPolicies.Basic256Sha256
             };
+
+            ServerSecurityPolicy noSecurityPolicy = new ServerSecurityPolicy()
+            {
+                SecurityMode = MessageSecurityMode.None,
+                SecurityPolicyUri = SecurityPolicies.None
+            };
+
             ApplicationConfiguration.ServerConfiguration.SecurityPolicies.Add(newPolicy);
+            ApplicationConfiguration.ServerConfiguration.SecurityPolicies.Add(noSecurityPolicy);
             Logger.Information($"Security policy {newPolicy.SecurityPolicyUri} with mode {newPolicy.SecurityMode} added");
 
             // add none secure transport on request

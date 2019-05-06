@@ -1497,6 +1497,23 @@ namespace OpcPublisher
                             await _jsonWriter.WriteEndObjectAsync().ConfigureAwait(false);
                         }
                     }
+
+                    // process NodeDisplayName
+                    if (!string.IsNullOrEmpty(messageData.NodeDisplayName))
+                    {
+                        await _jsonWriter.WritePropertyNameAsync(nameof(messageData.NodeDisplayName))
+                            .ConfigureAwait(false);
+                        await _jsonWriter.WriteValueAsync(messageData.NodeDisplayName).ConfigureAwait(false);
+                    }
+
+                    // process Description
+                    if (!string.IsNullOrEmpty(messageData.Description))
+                    {
+                        await _jsonWriter.WritePropertyNameAsync(nameof(messageData.Description))
+                            .ConfigureAwait(false);
+                        await _jsonWriter.WriteValueAsync(messageData.Description).ConfigureAwait(false);
+                    }
+
                     await _jsonWriter.WriteEndObjectAsync().ConfigureAwait(false);
                     await _jsonWriter.FlushAsync().ConfigureAwait(false);
                 }
