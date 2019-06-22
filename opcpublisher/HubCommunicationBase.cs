@@ -1,7 +1,9 @@
 ﻿using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using Opc.Ua.Client;
 
 namespace OpcPublisher
 {
@@ -903,6 +905,35 @@ namespace OpcPublisher
                 endpointUrls = NodeConfiguration.GetPublisherConfigurationFileEntries(null, false, out nodeConfigVersion).Select(e => e.EndpointUrl.OriginalString).ToList();
                 uint endpointsCount = (uint)endpointUrls.Count;
 
+                IOpcSession opcSession = null;
+                opcSession = NodeConfiguration.OpcSessions.FirstOrDefault(s => s.EndpointUrl.Equals(endpointUrls.First(), StringComparison.OrdinalIgnoreCase));
+                if (opcSession != null)
+                {
+                    IOpcUaSession uaSession = opcSession.OpcUaClientSession;
+                    
+                    Session session = uaSession.GetSession();
+                    var browser = new Browser(session) {
+                        BrowseDirection = BrowseDirection.Forward,
+                        ReferenceTypeId = ReferenceTypeIds.HierarchicalReferences,
+                        IncludeSubtypes = true,
+                        NodeClassMask = 0,
+                        ContinueUntilDone = false
+                    };
+
+                    var itemContainer = new ItemContainer();
+                    var rootRefs = browser.Browse(Objects.ObjectsFolder);
+                    var ip5Ref = rootRefs.Find((r) => r.DisplayName.Text.ToUpper().Contains("UMS"));
+                    if (ip5Ref != null)
+                    {
+                        Stopwatch w = new Stopwatch();
+                        w.Start();
+                        itemContainer = FetchAllNodes(session, ip5Ref, browser);
+                        w.Stop();
+                        Console.WriteLine($"Fetching of the tree took {w.ElapsedMilliseconds}ms");
+
+                    }
+                }
+
                 // validate version
                 if (getConfiguredEndpointsMethodRequest?.ContinuationToken != null)
                 {
@@ -973,6 +1004,70 @@ namespace OpcPublisher
             MethodResponse methodResponse = new MethodResponse(result, (int)statusCode);
             Logger.Information($"{logPrefix} completed with result {statusCode.ToString()}");
             return Task.FromResult(methodResponse);
+        }
+
+        public class ItemContainer
+        {
+            public string NodeId { get; set; }
+
+            public string DisplayName { get; set; }
+
+            public string Description { get; set; }
+            
+            public IList<ItemContainer> Children { get; set; }
+
+            public override string ToString() => $"{nameof(NodeId)}: {NodeId}, {nameof(DisplayName)}: {DisplayName}, {nameof(Description)}: {Description}";
+        }
+
+
+        private ItemContainer FetchAllNodes(Session session, ReferenceDescription root, Browser browser)
+        {
+            ItemContainer itemContainer = new ItemContainer();
+            var node = session.NodeCache.Find(root.NodeId);
+            if (node != null && node is ILocalNode localNode)
+            {
+                var nodeId = localNode.NodeId.ToString();
+                if (nodeId.Contains("ServerStatus") || nodeId.Contains("%"))
+                {
+                    return null;
+                }
+
+                itemContainer.NodeId = nodeId;
+                itemContainer.DisplayName =  node.DisplayName?.Text;
+                itemContainer.Description = localNode.Description?.Text;
+                itemContainer.Children = FetchChildren(session, root, browser);
+            }
+            return itemContainer;
+        }
+
+        private IList<ItemContainer> FetchChildren(Session session, ReferenceDescription root, Browser browser)
+        {
+            var children = new List<ItemContainer>();
+            var childrenReferences = browser.Browse((NodeId)root.NodeId);
+            if (childrenReferences != null && childrenReferences.Count > 0)
+            {
+                foreach (var childrenReference in childrenReferences)
+                {
+                    var subNode = session.NodeCache.Find(childrenReference.NodeId);
+                    if (subNode != null && subNode is ILocalNode subLocalNode)
+                    {
+                        var nodeId = subLocalNode.NodeId.ToString();
+
+                        if (nodeId.Contains("ServerStatus") || nodeId.Contains("%"))
+                        {
+                            continue;
+                        }
+                        
+                        var childrenContainer = new ItemContainer();
+                        childrenContainer.NodeId = nodeId;
+                        childrenContainer.DisplayName = subLocalNode.DisplayName?.Text;
+                        childrenContainer.Description = subLocalNode.Description?.Text;
+                        childrenContainer.Children = FetchChildren(session, childrenReference, browser);
+                        children.Add(childrenContainer);
+                    }
+                }
+            }
+            return children;
         }
 
         /// <summary>
@@ -1078,6 +1173,8 @@ namespace OpcPublisher
                     }
                 }
             }
+
+            
 
             // build response
             byte[] result = null;
@@ -1384,6 +1481,19 @@ namespace OpcPublisher
             MethodResponse methodResponse = new MethodResponse(result, (int)HttpStatusCode.NotImplemented);
             return Task.FromResult(methodResponse);
         }
+
+        #region IP5_CASL_Extension
+
+        public virtual Task<MethodResponse> HandleGetTree(MethodRequest methodRequest, object userContext)
+        {
+            // TODO DOS REIS INACIO
+
+
+            return null;
+        }
+
+
+        #endregion
 
         /// <summary>
         /// Initializes internal message processing.
