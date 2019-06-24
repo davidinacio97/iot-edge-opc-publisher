@@ -26,7 +26,7 @@ namespace OpcPublisher
     /// <summary>
     /// Class to handle all IoTHub/EdgeHub communication.
     /// </summary>
-    public class HubCommunicationBase : IHubCommunication, IDisposable
+    public partial class HubCommunicationBase : IHubCommunication, IDisposable
     {
         /// <summary>
         /// Specifies the queue capacity for monitored item events.
@@ -107,7 +107,7 @@ namespace OpcPublisher
         /// Max allowed payload of an IoTHub direct method call response.
         /// </summary>
         public static int MaxResponsePayloadLength { get; } = 128 * 1024 - 256;
-
+        
         /// <summary>
         /// The protocol to use for hub communication.
         /// </summary>
@@ -142,8 +142,9 @@ namespace OpcPublisher
             IotHubDirectMethods.Add("GetDiagnosticStartupLog", HandleGetDiagnosticStartupLogMethodAsync);
             IotHubDirectMethods.Add("ExitApplication", HandleExitApplicationMethodAsync);
             IotHubDirectMethods.Add("GetInfo", HandleGetInfoMethodAsync);
+            IotHubDirectMethods.Add("FetchOpcTree", HandleFetchOpcTreeAsync);
         }
-
+        
         /// <summary>
         /// Implement IDisposable.
         /// </summary>
@@ -904,36 +905,7 @@ namespace OpcPublisher
                 // get the list of all endpoints
                 endpointUrls = NodeConfiguration.GetPublisherConfigurationFileEntries(null, false, out nodeConfigVersion).Select(e => e.EndpointUrl.OriginalString).ToList();
                 uint endpointsCount = (uint)endpointUrls.Count;
-
-                IOpcSession opcSession = null;
-                opcSession = NodeConfiguration.OpcSessions.FirstOrDefault(s => s.EndpointUrl.Equals(endpointUrls.First(), StringComparison.OrdinalIgnoreCase));
-                if (opcSession != null)
-                {
-                    IOpcUaSession uaSession = opcSession.OpcUaClientSession;
-                    
-                    Session session = uaSession.GetSession();
-                    var browser = new Browser(session) {
-                        BrowseDirection = BrowseDirection.Forward,
-                        ReferenceTypeId = ReferenceTypeIds.HierarchicalReferences,
-                        IncludeSubtypes = true,
-                        NodeClassMask = 0,
-                        ContinueUntilDone = false
-                    };
-
-                    var itemContainer = new ItemContainer();
-                    var rootRefs = browser.Browse(Objects.ObjectsFolder);
-                    var ip5Ref = rootRefs.Find((r) => r.DisplayName.Text.ToUpper().Contains("UMS"));
-                    if (ip5Ref != null)
-                    {
-                        Stopwatch w = new Stopwatch();
-                        w.Start();
-                        itemContainer = FetchAllNodes(session, ip5Ref, browser);
-                        w.Stop();
-                        Console.WriteLine($"Fetching of the tree took {w.ElapsedMilliseconds}ms");
-
-                    }
-                }
-
+                
                 // validate version
                 if (getConfiguredEndpointsMethodRequest?.ContinuationToken != null)
                 {
@@ -1005,71 +977,7 @@ namespace OpcPublisher
             Logger.Information($"{logPrefix} completed with result {statusCode.ToString()}");
             return Task.FromResult(methodResponse);
         }
-
-        public class ItemContainer
-        {
-            public string NodeId { get; set; }
-
-            public string DisplayName { get; set; }
-
-            public string Description { get; set; }
-            
-            public IList<ItemContainer> Children { get; set; }
-
-            public override string ToString() => $"{nameof(NodeId)}: {NodeId}, {nameof(DisplayName)}: {DisplayName}, {nameof(Description)}: {Description}";
-        }
-
-
-        private ItemContainer FetchAllNodes(Session session, ReferenceDescription root, Browser browser)
-        {
-            ItemContainer itemContainer = new ItemContainer();
-            var node = session.NodeCache.Find(root.NodeId);
-            if (node != null && node is ILocalNode localNode)
-            {
-                var nodeId = localNode.NodeId.ToString();
-                if (nodeId.Contains("ServerStatus") || nodeId.Contains("%"))
-                {
-                    return null;
-                }
-
-                itemContainer.NodeId = nodeId;
-                itemContainer.DisplayName =  node.DisplayName?.Text;
-                itemContainer.Description = localNode.Description?.Text;
-                itemContainer.Children = FetchChildren(session, root, browser);
-            }
-            return itemContainer;
-        }
-
-        private IList<ItemContainer> FetchChildren(Session session, ReferenceDescription root, Browser browser)
-        {
-            var children = new List<ItemContainer>();
-            var childrenReferences = browser.Browse((NodeId)root.NodeId);
-            if (childrenReferences != null && childrenReferences.Count > 0)
-            {
-                foreach (var childrenReference in childrenReferences)
-                {
-                    var subNode = session.NodeCache.Find(childrenReference.NodeId);
-                    if (subNode != null && subNode is ILocalNode subLocalNode)
-                    {
-                        var nodeId = subLocalNode.NodeId.ToString();
-
-                        if (nodeId.Contains("ServerStatus") || nodeId.Contains("%"))
-                        {
-                            continue;
-                        }
-                        
-                        var childrenContainer = new ItemContainer();
-                        childrenContainer.NodeId = nodeId;
-                        childrenContainer.DisplayName = subLocalNode.DisplayName?.Text;
-                        childrenContainer.Description = subLocalNode.Description?.Text;
-                        childrenContainer.Children = FetchChildren(session, childrenReference, browser);
-                        children.Add(childrenContainer);
-                    }
-                }
-            }
-            return children;
-        }
-
+        
         /// <summary>
         /// Handle method call to get list of configured nodes on a specific endpoint.
         /// </summary>
@@ -1484,12 +1392,189 @@ namespace OpcPublisher
 
         #region IP5_CASL_Extension
 
-        public virtual Task<MethodResponse> HandleGetTree(MethodRequest methodRequest, object userContext)
+        private Task<MethodResponse> HandleFetchOpcTreeAsync(MethodRequest methodrequest, object usercontext)
         {
-            // TODO DOS REIS INACIO
+            var stopwatch = new Stopwatch();
+            stopwatch.Start();
 
+            string logPrefix = "HandleFetchOpcTreeAsync:";
+            FetchTreeMethodResponseModel fetchTreeMethodResponseModel = new FetchTreeMethodResponseModel();
+            HttpStatusCode statusCode = HttpStatusCode.OK;
+            List<string> statusResponse = new List<string>();
+            Logger.Information($"{logPrefix} started");
+            try
+            {
+                if (_fetchOpcTreeCache == null)
+                {
+                    _fetchOpcTreeCache = FetchItems();
+                }
 
+                fetchTreeMethodResponseModel.Items = _fetchOpcTreeCache;
+            }
+            catch (Exception e)
+            {
+                var statusMessage = $"Exception ({e.Message}) while retrieving opc tree";
+                Logger.Error(e, $"{logPrefix} Exception");
+                statusResponse.Add(statusMessage);
+                statusCode = HttpStatusCode.InternalServerError;
+            }
+
+            string resultString;
+            if (statusCode == HttpStatusCode.OK)
+            {
+                resultString = JsonConvert.SerializeObject(fetchTreeMethodResponseModel);
+            }
+            else
+            {
+                resultString = JsonConvert.SerializeObject(statusResponse);
+            }
+            // build response
+            var result = Encoding.UTF8.GetBytes(resultString);
+            if (result.Length > MaxResponsePayloadLength)
+            {
+                Logger.Error($"{logPrefix} Response size is too long");
+                Array.Resize(ref result, result.Length > MaxResponsePayloadLength ? MaxResponsePayloadLength : result.Length);
+            }
+            MethodResponse methodResponse = new MethodResponse(result, (int)statusCode);
+            stopwatch.Stop();
+            Logger.Information($"{logPrefix} completed with result {statusCode.ToString()} within {stopwatch.ElapsedMilliseconds}ms");
+            return Task.FromResult(methodResponse);
+        }
+
+        private List<ItemContainerInfo> FetchItems()
+        {
+            var items = new List<ItemContainerInfo>();
+            uint nodeConfigVersion = 0;
+            // get the list of all endpoints
+            var endpointUrls = NodeConfiguration.GetPublisherConfigurationFileEntries(null, false, out nodeConfigVersion).Select(e => e.EndpointUrl.OriginalString).ToList();
+
+            // Fetch tree foreach endpoint
+            foreach (string endpointUrl in endpointUrls)
+            {
+                var itemContainer = FetchItemContainer(endpointUrl);
+                if (itemContainer != null)
+                {
+                    items.Add(new ItemContainerInfo {
+                        EndPointUrl = endpointUrl,
+                        Items = itemContainer
+                    });
+                }
+            }
+
+            return items;
+        }
+
+        private ItemContainer FetchItemContainer(string endPointUrl)
+        {
+            // get the tree
+            IOpcSession opcSession = null;
+            opcSession = NodeConfiguration.OpcSessions.FirstOrDefault(s => s.EndpointUrl.Equals(endPointUrl, StringComparison.OrdinalIgnoreCase));
+            IOpcUaSession uaSession = opcSession?.OpcUaClientSession;
+            if (uaSession != null)
+            {
+                Session session = uaSession.GetSession();
+                var browser = new Browser(session) {
+                    BrowseDirection = BrowseDirection.Forward,
+                    ReferenceTypeId = ReferenceTypeIds.HierarchicalReferences,
+                    IncludeSubtypes = true,
+                    NodeClassMask = 0,
+                    ContinueUntilDone = false
+                };
+
+                var rootReferences = browser.Browse(Objects.ObjectsFolder);
+                var umsReferences = rootReferences?.Find((r) => r.DisplayName.Text.ToUpper().Contains("UMS"));
+                if (umsReferences != null)
+                {
+                    var itemContainer = FetchAllNodes(session, umsReferences, browser);
+                    return itemContainer;
+                }
+            }
             return null;
+        }
+
+
+        private ItemContainer FetchAllNodes(Session session, ReferenceDescription root, Browser browser)
+        {
+            ItemContainer itemContainer = new ItemContainer();
+            var node = session.NodeCache.Find(root.NodeId);
+            if (node != null && node is ILocalNode localNode)
+            {
+                var nodeId = localNode.NodeId.ToString();
+                if (nodeId.Contains("ServerStatus") || nodeId.Contains("%"))
+                {
+                    return null;
+                }
+
+                itemContainer.NodeId = nodeId;
+                itemContainer.DisplayName = node.DisplayName?.Text;
+                itemContainer.Description = ComputeDescription(nodeId, localNode.Description?.Text);
+                itemContainer.Children = FetchChildren(session, root, browser);
+            }
+            return itemContainer;
+        }
+
+        private IList<ItemContainer> FetchChildren(Session session, ReferenceDescription root, Browser browser)
+        {
+            var children = new List<ItemContainer>();
+            var childrenReferences = browser.Browse((NodeId)root.NodeId);
+            if (childrenReferences != null && childrenReferences.Count > 0)
+            {
+                foreach (var childrenReference in childrenReferences)
+                {
+                    var subNode = session.NodeCache.Find(childrenReference.NodeId);
+                    if (subNode != null && subNode is ILocalNode subLocalNode)
+                    {
+                        var nodeId = subLocalNode.NodeId.ToString();
+
+                        if (nodeId.Contains("ServerStatus") || nodeId.Contains("%"))
+                        {
+                            continue;
+                        }
+
+                        var childrenContainer = new ItemContainer();
+                        childrenContainer.NodeId = nodeId;
+                        childrenContainer.DisplayName = subLocalNode.DisplayName?.Text;
+                        childrenContainer.Description = ComputeDescription(nodeId, subLocalNode.Description?.Text);
+                        childrenContainer.Children = FetchChildren(session, childrenReference, browser);
+                        children.Add(childrenContainer);
+                    }
+                }
+            }
+            return children;
+        }
+
+        private string ComputeDescription(string nodeId, string description)
+        {
+            if (description != null)
+            {
+                return description;
+            }
+
+            var nodeIdParts = nodeId.Split(".");
+            if (nodeIdParts.Length > 1)
+            {
+                var lastPart = nodeIdParts.Last();
+                var key = _dataPointNameDictionary.Keys.FirstOrDefault(s => lastPart.ToLower().Contains(s.ToLower()));
+                if (key != null)
+                {
+                    return $"{_dataPointNameDictionary[key]} {lastPart.Split("_").Last()}";
+                }
+            }
+            return null;
+        }
+        
+        private static Dictionary<string, string> CreateDataPointNameDictionary()
+        {
+            var nameDictionary = new Dictionary<string, string>();
+            // Values for V-TAL
+            nameDictionary.Add("DAA", "GTA/Digitaler Ausgang");
+            nameDictionary.Add("GTA", "Anlage");
+            // Values for ASD
+            nameDictionary.Add("ASD", "System");
+            nameDictionary.Add("Detector", "Melder");
+            nameDictionary.Add("Network", "Netzwerk");
+            nameDictionary.Add("Node", "Knoten");
+            return nameDictionary;
         }
 
 
@@ -1981,5 +2066,8 @@ namespace OpcPublisher
         private static IHubClient _hubClient;
         private CancellationTokenSource _hubCommunicationCts;
         private CancellationToken _shutdownToken;
+
+        private Dictionary<string, string> _dataPointNameDictionary = CreateDataPointNameDictionary();
+        private List<ItemContainerInfo> _fetchOpcTreeCache = null;
     }
 }

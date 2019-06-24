@@ -707,9 +707,9 @@ namespace OpcPublisher
                 // start our server interface
                 try
                 {
-                    //Logger.Information($"Starting server on endpoint {OpcApplicationConfiguration.ApplicationConfiguration.ServerConfiguration.BaseAddresses[0].ToString(CultureInfo.InvariantCulture)} ...");
-                    //_publisherServer = new PublisherServer();
-                    //_publisherServer.Start(OpcApplicationConfiguration.ApplicationConfiguration);
+                    Logger.Information($"Starting server on endpoint {OpcApplicationConfiguration.ApplicationConfiguration.ServerConfiguration.BaseAddresses[0].ToString(CultureInfo.InvariantCulture)} ...");
+                    _publisherServer = new PublisherServer();
+                    _publisherServer.Start(OpcApplicationConfiguration.ApplicationConfiguration);
                     Logger.Information("Server started.");
                 }
                 catch (Exception e)
@@ -741,9 +741,9 @@ namespace OpcPublisher
                 await SessionStartAsync().ConfigureAwait(false);
 
                 //// Show notification on session events
-                //_publisherServer.CurrentInstance.SessionManager.SessionActivated += ServerEventStatus;
-                //_publisherServer.CurrentInstance.SessionManager.SessionClosing += ServerEventStatus;
-                //_publisherServer.CurrentInstance.SessionManager.SessionCreated += ServerEventStatus;
+                _publisherServer.CurrentInstance.SessionManager.SessionActivated += ServerEventStatus;
+                _publisherServer.CurrentInstance.SessionManager.SessionClosing += ServerEventStatus;
+                _publisherServer.CurrentInstance.SessionManager.SessionCreated += ServerEventStatus;
 
                 // startup completed
                 StartupCompleted = true;
