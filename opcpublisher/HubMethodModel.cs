@@ -3,11 +3,24 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
 using System;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.Runtime.InteropServices;
 
 namespace OpcPublisher
 {
+
+    public sealed class FetchTreeMethodResponseModel
+    {
+        public IList<ItemContainerInfo> Items { get; set; }
+    }
+
+    public sealed class ItemContainerInfo
+    {
+        public string EndPointUrl { get; set; }
+
+        public ItemContainer Items { get; set; }
+    }
+
+    
     /// <summary>
     /// Model for a get info response.
     /// </summary>
