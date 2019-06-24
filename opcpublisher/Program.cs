@@ -740,7 +740,7 @@ namespace OpcPublisher
                 // kick off OPC session creation and node monitoring
                 await SessionStartAsync().ConfigureAwait(false);
 
-                //// Show notification on session events
+                // Show notification on session events
                 _publisherServer.CurrentInstance.SessionManager.SessionActivated += ServerEventStatus;
                 _publisherServer.CurrentInstance.SessionManager.SessionClosing += ServerEventStatus;
                 _publisherServer.CurrentInstance.SessionManager.SessionCreated += ServerEventStatus;

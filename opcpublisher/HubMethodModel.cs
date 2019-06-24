@@ -10,11 +10,6 @@ namespace OpcPublisher
 
     public sealed class FetchTreeMethodResponseModel
     {
-        public FetchTreeMethodResponseModel()
-        {
-
-        }
-
         public IList<ItemContainerInfo> Items { get; set; }
     }
 

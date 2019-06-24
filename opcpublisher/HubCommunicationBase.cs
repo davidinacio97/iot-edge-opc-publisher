@@ -26,7 +26,7 @@ namespace OpcPublisher
     /// <summary>
     /// Class to handle all IoTHub/EdgeHub communication.
     /// </summary>
-    public partial class HubCommunicationBase : IHubCommunication, IDisposable
+    public class HubCommunicationBase : IHubCommunication, IDisposable
     {
         /// <summary>
         /// Specifies the queue capacity for monitored item events.
@@ -1081,9 +1081,7 @@ namespace OpcPublisher
                     }
                 }
             }
-
             
-
             // build response
             byte[] result = null;
             string resultString = null;
@@ -1491,11 +1489,10 @@ namespace OpcPublisher
             }
             return null;
         }
-
-
+        
         private ItemContainer FetchAllNodes(Session session, ReferenceDescription root, Browser browser)
         {
-            ItemContainer itemContainer = new ItemContainer();
+            var itemContainer = new ItemContainer();
             var node = session.NodeCache.Find(root.NodeId);
             if (node != null && node is ILocalNode localNode)
             {
@@ -1576,8 +1573,7 @@ namespace OpcPublisher
             nameDictionary.Add("Node", "Knoten");
             return nameDictionary;
         }
-
-
+        
         #endregion
 
         /// <summary>
